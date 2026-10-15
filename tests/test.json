@@ -1,0 +1,25 @@
+{
+  "kind": "OperatorUnitTest",
+  "name": "lin_ccc_crabs",
+  "namespace": "ds0",
+  "inputDataUri": "test_1_in.csv",
+  "outputDataUri": [
+    "test_1_out_1.csv",
+    "test_1_out_2.csv",
+    "test_1_out_3.csv"
+  ],
+  "columns": [
+    "variable"
+  ],
+  "rows": [
+    "sp"
+  ],
+  "colors": [],
+  "labels": [],
+  "yAxis": "y_values",
+  "xAxis": "x_values",
+  "generatedOn": "10/16/2026 01:00:00 AM 2026",
+  "version": "",
+  "propertyValues": [],
+  "absTol": 1e-09
+}

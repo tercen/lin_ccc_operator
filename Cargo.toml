@@ -1,0 +1,50 @@
+[package]
+name = "lin_ccc_operator"
+version = "0.1.0"
+edition = "2024"
+description = "Lin's concordance correlation coefficient for Tercen"
+license = "GPL-2.0-or-later"
+
+[[bin]]
+name = "lin_ccc_operator"
+path = "src/main.rs"
+
+[[bin]]
+name = "dev"
+path = "src/bin/dev.rs"
+
+
+[dependencies]
+anyhow = "1"
+thiserror = "1"
+
+# --- Tercen plumbing (same stack as read_fcs_rust_operator) ---
+tercen-rs = { git = "https://github.com/tercen/tercen-rs", branch = "main" }
+tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "time"] }
+tonic = "0.14"
+futures = "0.3"
+# TSON decode for the streamed crosstab chunks (tercen-rs pulls it in anyway; decoding here
+# avoids building a polars DataFrame per chunk).
+rustson = { git = "https://github.com/tercen/rustson", branch = "master" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Allocator: honours the task runner's MALLOC_CONF and returns freed memory to the OS
+# (create-rust-operator §5; read_fcs measured the difference).
+tikv-jemallocator = "0.6"
+
+
+
+[dev-dependencies]
+tempfile = "3"
+# The test that checks operator.json's spec against the emitted columns.
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 1

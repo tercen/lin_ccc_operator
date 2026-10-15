@@ -1,0 +1,157 @@
+{
+  "name": "Lin's CCC",
+  "description": "Lin's concordance correlation coefficient between the x and y values of each cell, with its confidence interval, its precision (Pearson r) and accuracy (bias correction) parts, and Bland-Altman limits of agreement. For method comparison and reproducibility studies.",
+  "tags": [
+    "descriptive statistics",
+    "statistical testing",
+    "method comparison",
+    "agreement"
+  ],
+  "communicationProtocol": "grpc",
+  "authors": [
+    "tercen"
+  ],
+  "urls": [
+    "https://github.com/tercen/lin_ccc_operator"
+  ],
+  "container": "ghcr.io/tercen/lin_ccc_operator:0.1.0",
+  "properties": [
+    {
+      "kind": "DoubleProperty",
+      "name": "confidence_level",
+      "defaultValue": 0.95,
+      "description": "Two-sided confidence level for the CCC interval (Fisher z, Lin 1989) and the Bland-Altman limits of agreement. Strictly between 0 and 1."
+    }
+  ],
+  "operatorSpec": {
+    "kind": "OperatorSpec",
+    "ontologyUri": "https://tercen.com/_ontology/tercen",
+    "ontologyVersion": "0.0.1",
+    "inputSpecs": [
+      {
+        "kind": "CrosstabSpec",
+        "metaFactors": [
+          {
+            "kind": "MetaFactor",
+            "name": "Row",
+            "type": "",
+            "description": "Optional factor for stratification: one CCC per row level (for example per analyte or per sample type).",
+            "ontologyMapping": "variable",
+            "crosstabMapping": "row",
+            "cardinality": "0..n",
+            "factors": []
+          },
+          {
+            "kind": "MetaFactor",
+            "name": "Column",
+            "type": "",
+            "description": "Optional factor for stratification: one CCC per column level.",
+            "ontologyMapping": "observation",
+            "crosstabMapping": "column",
+            "cardinality": "0..n",
+            "factors": []
+          }
+        ],
+        "axis": [
+          {
+            "kind": "AxisSpec",
+            "metaFactors": [
+              {
+                "kind": "MetaFactor",
+                "name": "Method B",
+                "type": "double",
+                "description": "Values from the method being compared.",
+                "ontologyMapping": "measurement",
+                "crosstabMapping": "y",
+                "cardinality": "1",
+                "factors": []
+              },
+              {
+                "kind": "MetaFactor",
+                "name": "Method A",
+                "type": "double",
+                "description": "Values from the reference method, paired with the y values of the same cell.",
+                "ontologyMapping": "measurement",
+                "crosstabMapping": "x",
+                "cardinality": "1",
+                "factors": []
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputSpecsV2": [
+      {
+        "kind": "OperatorJoinSpec",
+        "joinOperators": [
+          {
+            "kind": "JoinOperator",
+            "joinType": "left",
+            "leftPair": {
+              "kind": "ColumnPair",
+              "lColumns": [
+                "Row",
+                "Column"
+              ],
+              "rColumns": [
+                "Row",
+                "Column"
+              ]
+            },
+            "rightRelation": {
+              "kind": "TableRelation",
+              "attributes": [
+                {
+                  "kind": "Attribute",
+                  "name": "ccc",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "ccc_lower",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "ccc_upper",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "pearson_r",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "bias_correction",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "n",
+                  "type": "int32"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "ba_bias",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "ba_lower",
+                  "type": "double"
+                },
+                {
+                  "kind": "Attribute",
+                  "name": "ba_upper",
+                  "type": "double"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
