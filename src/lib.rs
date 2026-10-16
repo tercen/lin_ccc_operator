@@ -10,6 +10,7 @@ pub mod context;
 pub mod input;
 pub mod output;
 pub mod pagecache;
+pub mod pairwise;
 pub mod progress;
 pub mod props;
 pub mod tson;
@@ -189,38 +190,60 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
     tracing::info!(n_values, n_rows, n_cols, "crosstab size");
     rep.at(0, format!("Reading {n_values} value pairs"));
 
-    let mut cells = Cells::new(n_rows, n_cols);
-    let mut seen = 0usize;
-    let columns = [".ri", ".ci", ".x", ".y"];
-    input::for_each_chunk(ctx, &columns, n_values, CHUNK, |c| {
-        if c.x.len() != c.y.len() {
+    let qt_cols = input::qt_columns(ctx).await?;
+    let rows = if qt_cols.iter().any(|c| c == ".x") {
+        read_xy(ctx, n_values, n_rows, n_cols, z, &rep).await?
+    } else {
+        let rnames = ctx
+            .rnames()
+            .await
+            .map_err(|e| anyhow!("row factors: {e}"))?;
+        let cnames = ctx
+            .cnames()
+            .await
+            .map_err(|e| anyhow!("column factors: {e}"))?;
+        let shared: Vec<&String> = rnames
+            .iter()
+            .filter(|r| !r.is_empty() && cnames.contains(r))
+            .collect();
+        if shared.is_empty() {
             return Err(anyhow!(
-                "the crosstab has no numeric x axis: Lin's CCC compares the x and y values of \
-                 each cell, so both axes must be projected"
+                "a numeric x axis is required: put the reference method on x and the method \
+                 being compared on y. (Or, to compare every sample with every other, put the \
+                 sample factor on both rows and columns and the observation id as a label.)"
             ));
         }
-        cells.add(&c.ri, &c.ci, &c.x, &c.y)?;
-        seen += c.len();
-        rep.at(
-            progress::band(progress::READ, seen, n_values.max(1)),
-            format!("Read {seen} of {n_values} value pairs"),
-        );
-        Ok(())
-    })
-    .await
-    .map_err(|e| {
-        let msg = e.to_string();
-        if msg.contains("no column '.x'") {
-            anyhow!(
-                "a numeric x axis is required: put the reference method on x and the method \
-                 being compared on y ({msg})"
-            )
-        } else {
-            e
+        // The label factors of the first axis query: the observation id to pair on.
+        let labels: Vec<String> = ctx
+            .cube_query()
+            .axis_queries
+            .first()
+            .map(|aq| aq.labels.iter().map(|f| f.name.clone()).collect())
+            .unwrap_or_default();
+        if labels.is_empty() {
+            return Err(anyhow!(
+                "pairwise projection ({} on rows and columns) without a label: add the factor \
+                 that identifies an observation (for example the gene or peptide id) as a \
+                 label, so values of two samples can be paired",
+                shared
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
-    })?;
-
-    let rows = cells.finish(z);
+        tracing::info!(?labels, ?shared, "pairwise projection");
+        rep.info(format!(
+            "Pairwise: comparing every {} with every other, paired on {}",
+            shared
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            labels.join(", ")
+        ));
+        read_pairwise(ctx, n_values, n_rows, n_cols, z, &labels, &rep).await?
+    };
     tracing::info!(cells = rows.len(), "statistics computed");
     rep.at(progress::WRITE.0, format!("Writing {} cells", rows.len()));
 
@@ -271,6 +294,66 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
         "done"
     );
     Ok(())
+}
+
+/// The explicit x/y projection: each cell's pairs are in the cell.
+async fn read_xy(
+    ctx: &ContextBase,
+    n_values: usize,
+    n_rows: usize,
+    n_cols: usize,
+    z: f64,
+    rep: &Reporter,
+) -> Result<Vec<output::Row>> {
+    let mut cells = Cells::new(n_rows, n_cols);
+    let mut seen = 0usize;
+    input::for_each_chunk(ctx, &[".ri", ".ci", ".x", ".y"], n_values, CHUNK, |c| {
+        cells.add(&c.ri, &c.ci, &c.x, &c.y)?;
+        seen += c.len();
+        rep.at(
+            progress::band(progress::READ, seen, n_values.max(1)),
+            format!("Read {seen} of {n_values} value pairs"),
+        );
+        Ok(())
+    })
+    .await?;
+    Ok(cells.finish(z))
+}
+
+/// The pairwise projection: values sit on their own sample's diagonal cell, keyed by label.
+async fn read_pairwise(
+    ctx: &ContextBase,
+    n_values: usize,
+    n_rows: usize,
+    n_cols: usize,
+    z: f64,
+    labels: &[String],
+    rep: &Reporter,
+) -> Result<Vec<output::Row>> {
+    let mut columns: Vec<&str> = vec![".ri", ".ci", ".y"];
+    columns.extend(labels.iter().map(|s| s.as_str()));
+    let mut collector = pairwise::Collector::default();
+    let mut seen = 0usize;
+    input::for_each_chunk(ctx, &columns, n_values, CHUNK, |c| {
+        collector.add(&c.ri, &c.ci, &c.keys, &c.y);
+        seen += c.len();
+        rep.at(
+            progress::band(progress::READ, seen, n_values.max(1)),
+            format!("Read {seen} of {n_values} values"),
+        );
+        Ok(())
+    })
+    .await?;
+    let (rows, summary) = collector.finish(n_rows, n_cols, z)?;
+    tracing::info!(?summary, "pairwise assembled");
+    if summary.duplicates > 0 {
+        rep.info(format!(
+            "{} values share a sample and label with another value; the last one was used. \
+             Add the factor that makes them distinct as a label.",
+            summary.duplicates
+        ));
+    }
+    Ok(rows)
 }
 
 fn peak_rss_kb() -> Option<u64> {

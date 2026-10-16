@@ -300,3 +300,49 @@ fn memory_model_is_well_formed_and_covers_the_structure() {
         );
     }
 }
+
+/// Pairwise mode against `dev/make_pairwise_golden.py`: five samples on rows and columns,
+/// paired on the observation label, one observation missing from one sample. The rows are fed
+/// in the layout the platform uses (every value on its own sample's diagonal cell).
+#[test]
+fn pairwise_mode_matches_the_numpy_golden() {
+    use lin_ccc_operator::pairwise::Collector;
+    let (h, rows) = read_csv(&format!("{DIR}/pairwise_in.csv"));
+    let (io, iv, ival) = (
+        col(&h, "observation"),
+        col(&h, "variable"),
+        col(&h, "value"),
+    );
+    let mut samples: Vec<String> = rows.iter().map(|r| r[iv].clone()).collect();
+    samples.sort();
+    samples.dedup();
+    let idx: Vec<i32> = rows
+        .iter()
+        .map(|r| samples.iter().position(|s| *s == r[iv]).unwrap() as i32)
+        .collect();
+    let keys: Vec<String> = rows.iter().map(|r| r[io].clone()).collect();
+    let y: Vec<f64> = rows.iter().map(|r| r[ival].parse().unwrap()).collect();
+    let mut c = Collector::default();
+    c.add(&idx, &idx, &keys, &y);
+    let (got, summary) = c
+        .finish(samples.len(), samples.len(), z_for_level(0.95))
+        .unwrap();
+    assert_eq!(summary.observations, 100);
+    assert_eq!(summary.duplicates, 0);
+
+    let (gh, golden) = read_csv(&format!("{DIR}/pairwise_out.csv"));
+    assert_eq!(golden.len(), 25);
+    assert_eq!(got.len(), 25);
+    for g in &golden {
+        let ri: i32 = g[col(&gh, ".ri")].parse().unwrap();
+        let ci: i32 = g[col(&gh, ".ci")].parse().unwrap();
+        let r = got.iter().find(|r| r.ri == ri && r.ci == ci).unwrap();
+        let n: u64 = g[col(&gh, "n")].parse().unwrap();
+        assert_eq!(r.stats.n, n, "cell ({ri},{ci}) pair count");
+        for (name, have) in [("ccc", r.stats.ccc), ("ba_bias", r.stats.ba_bias)] {
+            let want: f64 = g[col(&gh, name)].parse().unwrap();
+            let e = (have - want).abs() / want.abs().max(1e-12);
+            assert!(e < 1e-11, "cell ({ri},{ci}) {name}: {have} vs {want}");
+        }
+    }
+}

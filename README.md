@@ -19,6 +19,12 @@ Input|.
 `y-axis` | values from the method being compared (method B), paired with x in the same cell
 `row` | optional, factor for stratification (one CCC per level)
 `column` | optional, factor for stratification (one CCC per level)
+`labels` | pairwise only: the observation id to pair on (for example the gene id)
+
+**Pairwise.** To compare every sample with every other, put the sample factor on both rows
+and columns, the value on y, the observation id as a label, and leave x empty. Cell (row i,
+column j) then compares sample i (y) with sample j (x) on the observations they share; the
+diagonal is 1.
 
 Settings|.
 ---|---

@@ -15,6 +15,9 @@ pub struct Chunk {
     pub ci: Vec<i32>,
     pub x: Vec<f64>,
     pub y: Vec<f64>,
+    /// The pairing key of each row (pairwise mode): the label factors' values, joined with
+    /// U+001F. Empty unless key columns were requested.
+    pub keys: Vec<String>,
 }
 
 impl Chunk {
@@ -63,7 +66,15 @@ where
             )
             .await
             .map_err(|e| anyhow!("read cells {offset}..{}: {e}", offset + want_rows))?;
-        let c = decode_chunk(&bytes, want(".ri"), want(".ci"), want(".x"), want(".y"))?;
+        let key_cols: Vec<&str> = columns
+            .iter()
+            .copied()
+            .filter(|c| !matches!(*c, ".ri" | ".ci" | ".x" | ".y"))
+            .collect();
+        let mut c = decode_chunk(&bytes, want(".ri"), want(".ci"), want(".x"), want(".y"))?;
+        if !key_cols.is_empty() {
+            c.keys = decode_keys(&bytes, &key_cols)?;
+        }
         if c.is_empty() {
             break;
         }
@@ -92,6 +103,17 @@ pub async fn row_count(ctx: &ContextBase) -> Result<usize> {
 /// Rows of the column facet table: the number of distinct `.ci`.
 pub async fn column_count(ctx: &ContextBase) -> Result<usize> {
     schema_rows(ctx, ctx.column_hash()).await
+}
+
+/// Column names of the projected crosstab table (`.x` is absent when no x axis is projected).
+pub async fn qt_columns(ctx: &ContextBase) -> Result<Vec<String>> {
+    let schema = ctx
+        .streamer()
+        .get_schema(ctx.qt_hash())
+        .await
+        .map_err(|e| anyhow!("get schema {}: {e}", ctx.qt_hash()))?;
+    tercen_rs::extract_column_names_from_schema(&schema)
+        .map_err(|e| anyhow!("read the columns of {}: {e}", ctx.qt_hash()))
 }
 
 async fn schema_rows(ctx: &ContextBase, hash: &str) -> Result<usize> {
@@ -256,5 +278,55 @@ fn as_f64(v: &rustson::Value, name: &str) -> Result<Vec<f64>> {
         rustson::Value::LSTI32(v) => v.iter().map(|x| *x as f64).collect(),
         rustson::Value::LSTU8(v) => v.iter().map(|x| *x as f64).collect(),
         other => bail!("column '{name}' is not a numeric list ({other:?})"),
+    })
+}
+
+/// The pairing key per row: the named columns' values as text, joined with U+001F.
+pub fn decode_keys(bytes: &[u8], key_cols: &[&str]) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for v in documents(bytes)? {
+        let rustson::Value::MAP(m) = v else {
+            bail!("chunk is not a map")
+        };
+        let mut doc_keys: Vec<String> = Vec::new();
+        for (k, name) in key_cols.iter().enumerate() {
+            let values = find_column(&m, name).ok_or_else(|| {
+                anyhow!(
+                    "chunk has no column '{name}' (it has {:?})",
+                    column_names(&m)
+                )
+            })?;
+            let vals = as_strings(values, name)?;
+            if k == 0 {
+                doc_keys = vals;
+            } else {
+                if vals.len() != doc_keys.len() {
+                    bail!(
+                        "label column '{name}' has {} values, expected {}",
+                        vals.len(),
+                        doc_keys.len()
+                    );
+                }
+                for (d, v) in doc_keys.iter_mut().zip(vals) {
+                    d.push('\u{1f}');
+                    d.push_str(&v);
+                }
+            }
+        }
+        out.extend(doc_keys);
+    }
+    Ok(out)
+}
+
+fn as_strings(v: &rustson::Value, name: &str) -> Result<Vec<String>> {
+    Ok(match v {
+        rustson::Value::LSTSTR(sv) => sv
+            .try_to_vec()
+            .map_err(|e| anyhow!("column '{name}' is not valid text: {e:?}"))?,
+        // Bit patterns for floats, so 1.0 and 1.00 are one key and no formatting is involved.
+        rustson::Value::LSTF64(v) => v.iter().map(|x| format!("{:x}", x.to_bits())).collect(),
+        rustson::Value::LSTI32(v) => v.iter().map(|x| x.to_string()).collect(),
+        rustson::Value::LSTU8(v) => v.iter().map(|x| x.to_string()).collect(),
+        other => bail!("label column '{name}' has an unsupported type ({other:?})"),
     })
 }

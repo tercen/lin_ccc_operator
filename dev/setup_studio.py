@@ -3,6 +3,8 @@
     tercenctl data upload-csv -p <project> --filePath tests/test_1_in.csv -n crabs
     TERCEN_TOKEN=... python dev/setup_studio.py <workflowId> <tableSchemaId> [prop=value ...]
 
+Pairwise shape: DEV_ROW=DEV_COL=<sample>, DEV_X="" and DEV_LABEL=<observation id>.
+
 Leaves a DataStep whose `model.taskId` points at a done CubeQueryTask and whose `model.axis`
 holds an XYAxis, which is what `DevContext::from_workflow_step` needs (create-rust-operator §8a).
 """
@@ -24,6 +26,8 @@ ROW = os.environ.get("DEV_ROW", "sp")
 COL = os.environ.get("DEV_COL", "variable")
 Y = os.environ.get("DEV_Y", "y_values")
 X = os.environ.get("DEV_X", "x_values")
+LABEL = os.environ.get("DEV_LABEL", "")
+LABEL_TYPE = os.environ.get("DEV_LABEL_TYPE", "double")
 COL_TYPE = os.environ.get("DEV_COL_TYPE", "string")
 ROW_TYPE = os.environ.get("DEV_ROW_TYPE", "string")
 COL2 = os.environ.get("DEV_COL2", "")  # a second column factor, e.g. the sample
@@ -93,9 +97,10 @@ q.relation = ts.model.relation
 q.colColumns = ([factor(COL2, "string")] if COL2 else []) + [factor(COL, COL_TYPE)]
 q.rowColumns = [factor(ROW, ROW_TYPE)]
 aq = m.CubeAxisQuery(); aq.chartType = "point"; aq.pointSize = 4
-aq.xAxis = factor(X, "double")
+aq.xAxis = factor(X, "double") if X else factor("", "string")
 aq.yAxis = factor(Y, "double")
-aq.colors = []; aq.errors = []; aq.labels = []; aq.preprocessors = []
+aq.colors = []; aq.errors = []; aq.preprocessors = []
+aq.labels = [factor(LABEL, LABEL_TYPE)] if LABEL else []
 aq.xAxisSettings = m.AxisSettings(); aq.xAxisSettings.meta = []
 aq.yAxisSettings = m.AxisSettings(); aq.yAxisSettings.meta = []
 q.axisQueries = [aq]
@@ -112,7 +117,7 @@ if state != "DoneState":
     sys.exit(1)
 
 # --- point the step at it, and give it the XYAxis DevContext requires --------------------------
-axis = json.loads('{"kind":"XYAxisList","xyAxis":[{"kind":"XYAxis","chart":{"kind":"ChartPoint","name":"","pointSize":4,"properties":{"kind":"Properties","properties":[],"propertyValues":[]}},"xAxis":{"kind":"Axis","axisExtent":{"x":80.0,"y":30.0,"kind":"Point"},"axisSettings":{"kind":"AxisSettings","meta":[]},"graphicalFactor":{"kind":"GraphicalFactor","factor":{"kind":"Factor","name":"XMEASUREMENT","type":"double"},"rectangle":{"kind":"Rectangle","extent":{"x":0.0,"y":0.0,"kind":"Point"},"topLeft":{"x":0.0,"y":0.0,"kind":"Point"}}}},"yAxis":{"kind":"Axis","axisExtent":{"x":80.0,"y":30.0,"kind":"Point"},"axisSettings":{"kind":"AxisSettings","meta":[]},"graphicalFactor":{"kind":"GraphicalFactor","factor":{"kind":"Factor","name":"MEASUREMENT","type":"double"},"rectangle":{"kind":"Rectangle","extent":{"x":0.0,"y":0.0,"kind":"Point"},"topLeft":{"x":0.0,"y":0.0,"kind":"Point"}}}},"colors":{"kind":"Colors","factors":[],"palette":{"kind":"CategoryPalette","backcolor":0,"colorList":{"kind":"ColorList","name":""},"properties":[],"stringColorElements":[]}},"errors":{"kind":"Errors","factors":[]},"labels":{"kind":"Labels","factors":[]},"taskId":"","preprocessors":[]}],"rectangleSelections":[]}'.replace("XMEASUREMENT", X).replace("MEASUREMENT", Y))
+axis = json.loads('{"kind":"XYAxisList","xyAxis":[{"kind":"XYAxis","chart":{"kind":"ChartPoint","name":"","pointSize":4,"properties":{"kind":"Properties","properties":[],"propertyValues":[]}},"xAxis":{"kind":"Axis","axisExtent":{"x":80.0,"y":30.0,"kind":"Point"},"axisSettings":{"kind":"AxisSettings","meta":[]},"graphicalFactor":{"kind":"GraphicalFactor","factor":{"kind":"Factor","name":"XMEASUREMENT","type":"double"},"rectangle":{"kind":"Rectangle","extent":{"x":0.0,"y":0.0,"kind":"Point"},"topLeft":{"x":0.0,"y":0.0,"kind":"Point"}}}},"yAxis":{"kind":"Axis","axisExtent":{"x":80.0,"y":30.0,"kind":"Point"},"axisSettings":{"kind":"AxisSettings","meta":[]},"graphicalFactor":{"kind":"GraphicalFactor","factor":{"kind":"Factor","name":"MEASUREMENT","type":"double"},"rectangle":{"kind":"Rectangle","extent":{"x":0.0,"y":0.0,"kind":"Point"},"topLeft":{"x":0.0,"y":0.0,"kind":"Point"}}}},"colors":{"kind":"Colors","factors":[],"palette":{"kind":"CategoryPalette","backcolor":0,"colorList":{"kind":"ColorList","name":""},"properties":[],"stringColorElements":[]}},"errors":{"kind":"Errors","factors":[]},"labels":{"kind":"Labels","factors":[]},"taskId":"","preprocessors":[]}],"rectangleSelections":[]}'.replace('"name":"XMEASUREMENT","type":"double"', '"name":"XMEASUREMENT","type":"double"' if X else '"name":"","type":"string"').replace("XMEASUREMENT", X).replace("MEASUREMENT", Y))
 axis["xyAxis"][0]["taskId"] = task.id
 wf = client.workflowService.get(wf_id)
 ds = next(s for s in wf.steps if s.id == ds.id)

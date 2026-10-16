@@ -1,3 +1,16 @@
+## 0.1.1 (2026-10-16) — pairwise projections
+
+0.1.0 failed on Faris's tercen.com step with `Column named .x not found`: the step was a
+pairwise projection (samples.variable on rows and columns, samples.value on y, ds0.Gene_ID as
+a label, no x). In that layout the platform stores each value once on its own sample's
+diagonal cell (`.ri == .ci`, measured: 1,079,790 values, all diagonal) and the gRPC API has no
+pairwise select, so the operator now builds the grid itself (`src/pairwise.rs`): cell (i, j)
+pairs sample i (y) with sample j (x) on equal label values. Detected when the table has no
+`.x` and a factor is on both rows and columns; a pairwise projection without a label is a clear
+error. Checked against a numpy pairwise golden (`dev/make_pairwise_golden.py`, 25 cells, one
+missing observation) in the test suite and end to end on Studio (platform export, worst
+relative difference 7e-15).
+
 ## 0.1.0 (2026-10-16) — first release
 
 Lin's CCC per cell with Fisher-z interval, Pearson r, bias correction, n, and Bland–Altman

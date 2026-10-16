@@ -1,6 +1,6 @@
 {
   "name": "Lin's CCC",
-  "description": "Lin's concordance correlation coefficient between the x and y values of each cell, with its confidence interval, its precision (Pearson r) and accuracy (bias correction) parts, and Bland-Altman limits of agreement. For method comparison and reproducibility studies.",
+  "description": "Lin's concordance correlation coefficient between the x and y values of each cell, with its confidence interval, its precision (Pearson r) and accuracy (bias correction) parts, and Bland-Altman limits of agreement. Also works pairwise: the sample factor on both rows and columns, the value on y and the observation id as a label compares every sample with every other.",
   "tags": [
     "descriptive statistics",
     "statistical testing",
@@ -14,7 +14,7 @@
   "urls": [
     "https://github.com/tercen/lin_ccc_operator"
   ],
-  "container": "ghcr.io/tercen/lin_ccc_operator:0.1.0",
+  "container": "ghcr.io/tercen/lin_ccc_operator:0.1.1",
   "properties": [
     {
       "kind": "DoubleProperty",
@@ -70,7 +70,7 @@
                 "kind": "MetaFactor",
                 "name": "Method A",
                 "type": "double",
-                "description": "Values from the reference method, paired with the y values of the same cell.",
+                "description": "Values from the reference method, paired with the y values of the same cell. Leave empty for a pairwise projection (same factor on rows and columns, observation id as a label).",
                 "ontologyMapping": "measurement",
                 "crosstabMapping": "x",
                 "cardinality": "1",

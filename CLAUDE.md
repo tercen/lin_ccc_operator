@@ -19,7 +19,8 @@ Definitions and edge cases are documented in `src/algorithm.rs`.
 | `props` | the one setting, `confidence_level` |
 | `input` | crosstab size, facet table sizes, chunked `.ri/.ci/.x/.y` decode |
 | `output` | the result columns (`COLUMNS`) and the TSON writer for them |
-| `lib` | `Cells` (dense up to 4 M cells, hash map beyond) and the run |
+| `pairwise` | pairwise projections: label-keyed samples × observations tables, every cell assembled |
+| `lib` | `Cells` (dense up to 4 M cells, hash map beyond), mode detection and the run |
 
 `context`, `tson`, `upload`, `pagecache` and `progress` are **copies** of the asinh modules,
 kept identical on purpose; they should become a shared crate (see asinh's CLAUDE.md).
