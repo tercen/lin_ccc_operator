@@ -330,3 +330,46 @@ fn as_strings(v: &rustson::Value, name: &str) -> Result<Vec<String>> {
         other => bail!("label column '{name}' has an unsupported type ({other:?})"),
     })
 }
+
+/// One display label per facet row (`.ri` or `.ci` order): the facet table's factors as text,
+/// joined with " / " when there are several.
+pub async fn facet_labels(ctx: &ContextBase, hash: &str, names: &[String]) -> Result<Vec<String>> {
+    let names: Vec<String> = names.iter().filter(|n| !n.is_empty()).cloned().collect();
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let bytes = ctx
+        .streamer()
+        .stream_tson(hash, Some(names.clone()), 0, -1)
+        .await
+        .map_err(|e| anyhow!("read facet table {hash}: {e}"))?;
+    let mut out: Vec<String> = Vec::new();
+    for v in documents(&bytes)? {
+        let rustson::Value::MAP(m) = v else {
+            bail!("facet table is not a map")
+        };
+        let mut doc: Vec<String> = Vec::new();
+        for (k, name) in names.iter().enumerate() {
+            let values = find_column(&m, name)
+                .ok_or_else(|| anyhow!("facet table has no column '{name}'"))?;
+            let vals: Vec<String> = match values {
+                rustson::Value::LSTSTR(sv) => sv
+                    .try_to_vec()
+                    .map_err(|e| anyhow!("column '{name}' is not valid text: {e:?}"))?,
+                rustson::Value::LSTF64(v) => v.iter().map(|x| x.to_string()).collect(),
+                rustson::Value::LSTI32(v) => v.iter().map(|x| x.to_string()).collect(),
+                other => bail!("facet column '{name}' has an unsupported type ({other:?})"),
+            };
+            if k == 0 {
+                doc = vals;
+            } else {
+                for (d, v) in doc.iter_mut().zip(vals) {
+                    d.push_str(" / ");
+                    d.push_str(&v);
+                }
+            }
+        }
+        out.extend(doc);
+    }
+    Ok(out)
+}

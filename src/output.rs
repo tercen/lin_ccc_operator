@@ -24,6 +24,10 @@ pub const COLUMNS: [&str; 9] = [
     "ba_upper",
 ];
 
+/// The text columns after the statistics: each cell's row and column facet values. Project
+/// these (rows = `row_label`, columns = `column_label`) to show the result as a matrix.
+pub const LABEL_COLUMNS: [&str; 2] = ["row_label", "column_label"];
+
 /// One output row.
 #[derive(Debug, Clone, Copy)]
 pub struct Row {
@@ -47,6 +51,8 @@ pub fn write_result<W: Write>(
     table_name: &str,
     namespace: &str,
     rows: &[Row],
+    row_labels: &[String],
+    col_labels: &[String],
 ) -> Result<()> {
     let n = rows.len();
     let n_i32 = i32::try_from(n).map_err(|_| {
@@ -75,7 +81,7 @@ pub fn write_result<W: Write>(
     w.key("ascending")?;
     w.bool(false)?;
     w.key("columns")?;
-    w.list(COLUMNS.len() + 2)?;
+    w.list(COLUMNS.len() + 2 + LABEL_COLUMNS.len())?;
 
     column_header(w, ".ri", "int32", n_i32)?;
     w.i32_list(&rows.iter().map(|r| r.ri).collect::<Vec<_>>())?;
@@ -97,6 +103,23 @@ pub fn write_result<W: Write>(
             w.f64_list(&v)?;
         }
     }
+
+    // An absent facet (no row or no column factor) has no labels: empty text.
+    let pick = |v: &[String], i: i32| v.get(i as usize).cloned().unwrap_or_default();
+    column_header(w, &namespaced(namespace, LABEL_COLUMNS[0]), "string", n_i32)?;
+    w.str_list(
+        &rows
+            .iter()
+            .map(|r| pick(row_labels, r.ri))
+            .collect::<Vec<_>>(),
+    )?;
+    column_header(w, &namespaced(namespace, LABEL_COLUMNS[1]), "string", n_i32)?;
+    w.str_list(
+        &rows
+            .iter()
+            .map(|r| pick(col_labels, r.ci))
+            .collect::<Vec<_>>(),
+    )?;
 
     // No explicit join: the server relates the table by its `.ri` / `.ci` columns, which is
     // what the R client's `ctx$save()` produces for a per-cell result.
@@ -161,7 +184,8 @@ mod tests {
             stats: a.finish(1.96),
         }];
         let mut w = TsonWriter::new(Vec::new()).unwrap();
-        write_result(&mut w, "t", "ds0", &rows).unwrap();
+        let (rl, cl) = (vec!["sampleA".to_string()], vec!["sampleB".to_string()]);
+        write_result(&mut w, "t", "ds0", &rows, &rl, &cl).unwrap();
         let bytes = w.into_inner();
         let v = rustson::decode(std::io::Cursor::new(&bytes[..])).unwrap();
         let rustson::Value::MAP(m) = v else {
@@ -188,6 +212,25 @@ mod tests {
             .collect();
         let mut want = vec![".ri".to_string(), ".ci".to_string()];
         want.extend(COLUMNS.iter().map(|c| format!("ds0.{c}")));
+        want.extend(LABEL_COLUMNS.iter().map(|c| format!("ds0.{c}")));
         assert_eq!(names, want);
+        // and the labels are the facet values at the row's indices
+        let values = |name: &str| -> Vec<String> {
+            let c = cols
+                .iter()
+                .find_map(|c| {
+                    let rustson::Value::MAP(c) = c else {
+                        return None;
+                    };
+                    matches!(&c["name"], rustson::Value::STR(n) if n == name).then_some(c)
+                })
+                .unwrap();
+            let rustson::Value::LSTSTR(v) = &c["values"] else {
+                panic!("not text")
+            };
+            v.try_to_vec().unwrap()
+        };
+        assert_eq!(values("ds0.row_label"), ["sampleA"]);
+        assert_eq!(values("ds0.column_label"), ["sampleB"]);
     }
 }

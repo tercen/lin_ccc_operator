@@ -14,7 +14,7 @@
 //! instance.
 use lin_ccc_operator::Cells;
 use lin_ccc_operator::algorithm::z_for_level;
-use lin_ccc_operator::output::{COLUMNS, Row, value};
+use lin_ccc_operator::output::{COLUMNS, LABEL_COLUMNS, Row, value};
 use std::collections::HashMap;
 
 const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests");
@@ -122,6 +122,20 @@ fn every_column_matches_the_numpy_golden() {
             worst = worst.max(e);
         }
     }
+    for g in &golden {
+        let ri: usize = g[col(&h, ".ri")].parse().unwrap();
+        let ci: usize = g[col(&h, ".ci")].parse().unwrap();
+        assert_eq!(
+            g[col(&h, "ds0.row_label")],
+            row_levels[ri],
+            "row label of ({ri},{ci})"
+        );
+        assert_eq!(
+            g[col(&h, "ds0.column_label")],
+            col_levels[ci],
+            "column label of ({ri},{ci})"
+        );
+    }
     println!("numpy golden: 10 cells x 9 columns, worst relative difference {worst:e}");
 }
 
@@ -220,9 +234,15 @@ fn operator_spec_matches_the_code() {
             )
         })
         .collect();
+    let mut want = want;
+    want.extend(
+        LABEL_COLUMNS
+            .iter()
+            .map(|c| (c.to_string(), "string".to_string())),
+    );
     assert_eq!(
         attrs, want,
-        "declared output attributes drifted from output::COLUMNS"
+        "declared output attributes drifted from output::COLUMNS + LABEL_COLUMNS"
     );
 
     let axis = spec["operatorSpec"]["inputSpecs"][0]["axis"][0]["metaFactors"]

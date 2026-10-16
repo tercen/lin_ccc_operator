@@ -1,3 +1,20 @@
+## 0.1.2 (2026-10-16) — `row_label` / `column_label`, so a pairwise result can be shown as a matrix
+
+A downstream step on Faris's pairwise result (rows = columns = samples.variable, y = ccc) showed
+only the diagonal, and with wrong values. Cause, in the platform: `_convertResultByRowCol`
+(sci `sci_relation_vm/lib/src/sarno/save_result.dart`) joins a per-cell result to the column
+facet on `.ci` and the row facet on `.ri`, and in a pairwise projection both facets carry the
+same factor name, so they collide into one attribute. Each sample's row of CCCs then lands in
+one cell and the crosstab shows their mean: measured on Studio, the five diagonal values were
+exactly the per-sample means of the golden matrix.
+
+The operator now writes each cell's facet values as two text columns, in both modes. A
+downstream projection on `row_label` × `column_label` uses only result-side attributes, so the
+query planner prunes the input and the facets (`_removeCompositeRelation`) and reads the result
+table alone. Studio: 25 of 25 cells, worst relative difference 1.0e-15 against the pairwise
+golden; the x/y platform export still matches its golden, labels included. The proper platform
+fix (distinct names for the two facets of a pairwise result) is a sci change, not done here.
+
 ## 0.1.1 (2026-10-16) — pairwise projections
 
 0.1.0 failed on Faris's tercen.com step with `Column named .x not found`: the step was a

@@ -214,13 +214,13 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
             ));
         }
         // The label factors of the first axis query: the observation id to pair on.
-        let labels: Vec<String> = ctx
+        let labels_f: Vec<String> = ctx
             .cube_query()
             .axis_queries
             .first()
             .map(|aq| aq.labels.iter().map(|f| f.name.clone()).collect())
             .unwrap_or_default();
-        if labels.is_empty() {
+        if labels_f.is_empty() {
             return Err(anyhow!(
                 "pairwise projection ({} on rows and columns) without a label: add the factor \
                  that identifies an observation (for example the gene or peptide id) as a \
@@ -232,7 +232,7 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
                     .join(", ")
             ));
         }
-        tracing::info!(?labels, ?shared, "pairwise projection");
+        tracing::info!(?labels_f, ?shared, "pairwise projection");
         rep.info(format!(
             "Pairwise: comparing every {} with every other, paired on {}",
             shared
@@ -240,10 +240,27 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
                 .join(", "),
-            labels.join(", ")
+            labels_f.join(", ")
         ));
-        read_pairwise(ctx, n_values, n_rows, n_cols, z, &labels, &rep).await?
+        read_pairwise(ctx, n_values, n_rows, n_cols, z, &labels_f, &rep).await?
     };
+
+    // `row_label` / `column_label`: each cell's row and column facet values as text, in both
+    // modes. A downstream step that projects only these and the statistics reads the result
+    // table on its own, which is the only way to show a pairwise matrix: the facets of a
+    // pairwise projection share their factor names, and the platform's join of the result
+    // back onto the input collides them (each sample's row of values collapses into one cell
+    // showing their mean). See STATUS.md 0.1.2.
+    let row_names = ctx
+        .rnames()
+        .await
+        .map_err(|e| anyhow!("row factors: {e}"))?;
+    let col_names = ctx
+        .cnames()
+        .await
+        .map_err(|e| anyhow!("column factors: {e}"))?;
+    let row_labels = input::facet_labels(ctx, ctx.row_hash(), &row_names).await?;
+    let col_labels = input::facet_labels(ctx, ctx.column_hash(), &col_names).await?;
     tracing::info!(cells = rows.len(), "statistics computed");
     rep.at(progress::WRITE.0, format!("Writing {} cells", rows.len()));
 
@@ -262,6 +279,8 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
             &format!("{}_{}", ctx.step_id(), ctx.qt_hash()),
             ctx.namespace(),
             &rows,
+            &row_labels,
+            &col_labels,
         )?;
     }
 

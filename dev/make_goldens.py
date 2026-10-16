@@ -46,11 +46,12 @@ def ccc(x, y):
 cols = ['ccc', 'ccc_lower', 'ccc_upper', 'pearson_r', 'bias_correction', 'n',
         'ba_bias', 'ba_lower', 'ba_upper']
 with open(f'{out_dir}/test_1_out_1.csv', 'w') as f:
-    f.write('".ri",".ci",' + ','.join(f'"ds0.{c}"' for c in cols) + '\n')
+    f.write('".ri",".ci",' + ','.join(f'"ds0.{c}"' for c in cols) + ',"ds0.row_label","ds0.column_label"\n')
     for ci, cl in enumerate(col_levels):
         for ri, rl in enumerate(row_levels):
             s = ccc(*cells[(rl, cl)])
-            f.write(f'{ri},{ci},' + ','.join(repr(float(s[c])) if c != 'n' else str(s[c]) for c in cols) + '\n')
+            f.write(f'{ri},{ci},' + ','.join(repr(float(s[c])) if c != 'n' else str(s[c]) for c in cols)
+                    + f',"{rl}","{cl}"\n')
 with open(f'{out_dir}/test_1_out_2.csv', 'w') as f:
     f.write('"variable"\n' + ''.join(f'"{c}"\n' for c in col_levels))
 with open(f'{out_dir}/test_1_out_3.csv', 'w') as f:

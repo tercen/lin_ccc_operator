@@ -44,6 +44,13 @@ shape and coverage.
 Regenerate goldens: `python3 dev/make_goldens.py tests/test_1_in.csv tests` and, from the repo
 root, `Rscript dev/ccc_check.R`. Never regenerate them from this crate's own output.
 
+## Label columns (0.1.2)
+
+Every result row also carries `row_label` and `column_label` (`output::LABEL_COLUMNS`): the
+row and column facet values as text, `" / "`-joined for several factors, empty for an absent
+facet. They exist because a downstream projection on the original factors cannot show a
+pairwise result (see STATUS 0.1.2); projecting the labels reads the result table alone.
+
 ## Memory model
 
 `memory_model.json`: `8e-5 MB × n_main + 1.5 × 100 MB`. The binary is ~20 MB, one decoded

@@ -1,6 +1,6 @@
 [package]
 name = "lin_ccc_operator"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Lin's concordance correlation coefficient for Tercen"
 license = "GPL-2.0-or-later"

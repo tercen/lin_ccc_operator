@@ -39,6 +39,13 @@ Output|.
 `n` | number of complete pairs in the cell
 `ba_bias` | Bland–Altman mean difference, mean(y − x)
 `ba_lower`, `ba_upper` | Bland–Altman limits of agreement, bias ± z·sd(y − x)
+`row_label`, `column_label` | the cell's row and column factor values, as text
+
+**Showing the result as a matrix (heatmap).** In a downstream step, project rows =
+`row_label`, columns = `column_label`, y and colour = `ccc`. Use these two columns, not the
+original row and column factors: with a pairwise projection the original factor is the same
+on both sides, and projecting it shows only the diagonal (Tercen collapses each sample's
+values into one cell).
 
 ##### Details
 

@@ -14,7 +14,8 @@ def load(path):
     return rows
 
 got_rows, want_rows = load(sys.argv[1]), load(sys.argv[2])
-stats = [c.split(".", 1)[1] for c in want_rows[0] if c.startswith("ds0.")]
+stats = [c.split(".", 1)[1] for c in want_rows[0] if c.startswith("ds0.") and not c.endswith("_label")]
+labels = [c.split(".", 1)[1] for c in want_rows[0] if c.startswith("ds0.") and c.endswith("_label")]
 def col(row, name):
     return next(c for c in row if c == name or c.endswith("." + name))
 key = lambda r: (int(float(r[".ri"])), int(float(r[".ci"])))
@@ -30,8 +31,11 @@ for k, w in want.items():
         e = abs(a - b) / max(abs(b), 1e-12)
         if e > worst:
             worst, at = e, (k, s)
+label_errors = [(k, l) for k, w in want.items() if k in got for l in labels
+                if got[k][col(got[k], l)] != w[col(w, l)]]
+print(f"label columns {labels}: {len(label_errors)} mismatches")
 print(f"rows: {len(got)} from Tercen, {len(want)} golden; missing {len(missing)}, extra {len(extra)}")
 print(f"worst relative difference {worst:.3e}" + (f" at {at}" if at else ""))
-ok = not missing and not extra and worst <= 1e-9
+ok = not missing and not extra and worst <= 1e-9 and not label_errors
 print("PARITY OK" if ok else "PARITY FAILED")
 sys.exit(0 if ok else 1)

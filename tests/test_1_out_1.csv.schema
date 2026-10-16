@@ -55,6 +55,16 @@
       "kind": "ColumnSchema",
       "name": "ds0.ba_upper",
       "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "ds0.row_label",
+      "type": "string"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "ds0.column_label",
+      "type": "string"
     }
   ]
 }
